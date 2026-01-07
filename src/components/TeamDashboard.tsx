@@ -1,34 +1,109 @@
 import { useMemo } from 'react';
 import { Calendar, DollarSign, TrendingUp, Package, Gift, Wallet } from 'lucide-react';
 import { MetricCard } from './MetricCard';
-import { AppData } from '@/types';
-import { calculateSalary } from '@/lib/storage';
-import { format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
+import { Driver, Load, Bonus, SystemState } from '@/types';
+import { format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface TeamDashboardProps {
-  data: AppData;
+  drivers: Driver[];
+  loads: Load[];
+  bonuses: Bonus[];
+  systemState: SystemState;
   onDateChange: (date: Date) => void;
   onMonthChange: (month: string) => void;
 }
 
-export const TeamDashboard = ({ data, onDateChange, onMonthChange }: TeamDashboardProps) => {
-  const selectedDate = parseISO(data.systemState.selectedDay);
-  const selectedMonth = data.systemState.selectedMonth;
+const calculateSalary = (
+  loads: Load[],
+  bonuses: Bonus[],
+  startDate: Date,
+  endDate: Date
+) => {
+  const filteredLoads = loads.filter(load => {
+    const deliveryDate = parseISO(load.delivery_date);
+    return isWithinInterval(deliveryDate, { start: startDate, end: endDate });
+  });
+
+  const fullLoads = filteredLoads.filter(l => l.load_type === 'FULL');
+  const partialLoads = filteredLoads.filter(l => l.load_type === 'PARTIAL');
+
+  const fullGross = fullLoads.reduce((sum, l) => sum + Number(l.rate), 0);
+  const partialGross = partialLoads.reduce((sum, l) => sum + Number(l.rate), 0);
+  const totalGross = fullGross + partialGross;
+
+  const fullLoadCommission = fullGross * 0.01;
+  const partialLoadCommission = partialGross * 0.02;
+
+  const filteredBonuses = bonuses.filter(bonus => {
+    const bonusDate = parseISO(bonus.date);
+    return isWithinInterval(bonusDate, { start: startDate, end: endDate });
+  });
+
+  const totalBonuses = filteredBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalSalary = fullLoadCommission + partialLoadCommission + totalBonuses;
+
+  return {
+    fullLoadCommission,
+    partialLoadCommission,
+    totalBonuses,
+    totalSalary,
+    fullGross,
+    partialGross,
+    totalGross,
+  };
+};
+
+export const TeamDashboard = ({ 
+  drivers, 
+  loads, 
+  bonuses, 
+  systemState, 
+  onDateChange, 
+  onMonthChange 
+}: TeamDashboardProps) => {
+  const selectedDate = parseISO(systemState.selectedDay);
+  const selectedMonth = systemState.selectedMonth;
 
   const monthMetrics = useMemo(() => {
     const monthStart = startOfMonth(parseISO(`${selectedMonth}-01`));
     const monthEnd = endOfMonth(monthStart);
-    return calculateSalary(data.loads, data.bonuses, monthStart, monthEnd);
-  }, [data.loads, data.bonuses, selectedMonth]);
+    return calculateSalary(loads, bonuses, monthStart, monthEnd);
+  }, [loads, bonuses, selectedMonth]);
 
   const dayMetrics = useMemo(() => {
     const dayStart = startOfDay(selectedDate);
     const dayEnd = endOfDay(selectedDate);
-    return calculateSalary(data.loads, data.bonuses, dayStart, dayEnd);
-  }, [data.loads, data.bonuses, selectedDate]);
+    return calculateSalary(loads, bonuses, dayStart, dayEnd);
+  }, [loads, bonuses, selectedDate]);
+
+  // Chart data for weekly gross per driver
+  const chartData = useMemo(() => {
+    const monthStart = startOfMonth(parseISO(`${selectedMonth}-01`));
+    const monthEnd = endOfMonth(monthStart);
+    
+    return drivers.map(driver => {
+      const driverLoads = loads.filter(load => {
+        const deliveryDate = parseISO(load.delivery_date);
+        return load.driver_id === driver.id && isWithinInterval(deliveryDate, { start: monthStart, end: monthEnd });
+      });
+      
+      const fullGross = driverLoads.filter(l => l.load_type === 'FULL').reduce((sum, l) => sum + Number(l.rate), 0);
+      const partialGross = driverLoads.filter(l => l.load_type === 'PARTIAL').reduce((sum, l) => sum + Number(l.rate), 0);
+      
+      return {
+        name: driver.driver_name.split(' ')[0],
+        fullName: driver.driver_name,
+        type: driver.driver_type === 'owner_operator' ? 'OO' : 'CD',
+        fullGross,
+        partialGross,
+        total: fullGross + partialGross,
+      };
+    }).sort((a, b) => b.total - a.total);
+  }, [drivers, loads, selectedMonth]);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -101,6 +176,49 @@ export const TeamDashboard = ({ data, onDateChange, onMonthChange }: TeamDashboa
           />
         </div>
       </div>
+
+      {/* Driver Performance Chart */}
+      {chartData.length > 0 && (
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Driver Performance - {format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy')}
+          </h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="hsl(var(--muted-foreground))"
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                  }}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name === 'fullGross' ? 'Full Loads' : 'Partial Loads']}
+                  labelFormatter={(label, payload) => {
+                    const item = payload?.[0]?.payload;
+                    return item ? `${item.fullName} (${item.type})` : label;
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="fullGross" name="Full Loads" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="partialGross" name="Partial Loads" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Salary Breakdown */}
       <div className="glass-card p-6">

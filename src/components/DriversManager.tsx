@@ -1,23 +1,26 @@
 import { useState, useMemo } from 'react';
-import { Plus, User, TrendingUp, Calendar, Pencil, Trash2 } from 'lucide-react';
-import { AppData, Driver } from '@/types';
-import { calculateWeeklyGross, calculateAutomaticBonus } from '@/lib/storage';
+import { Plus, User, TrendingUp, Calendar, Pencil, Trash2, Truck, Building2 } from 'lucide-react';
+import { Driver, Load, SystemState, getBonusThresholds } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { format, parseISO, startOfWeek, addWeeks, subWeeks } from 'date-fns';
+import { format, parseISO, startOfWeek, addWeeks, subWeeks, endOfWeek, isWithinInterval } from 'date-fns';
 
 interface DriversManagerProps {
-  data: AppData;
-  onAddDriver: (driver: Omit<Driver, 'driverId' | 'createdAt'>) => Driver;
-  onUpdateDriver: (driverId: string, updates: Partial<Driver>) => void;
-  onDeleteDriver: (driverId: string) => void;
+  drivers: Driver[];
+  loads: Load[];
+  systemState: SystemState;
+  onAddDriver: (driver: Omit<Driver, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<Driver | null>;
+  onUpdateDriver: (id: string, updates: Partial<Driver>) => Promise<void>;
+  onDeleteDriver: (id: string) => Promise<void>;
   onWeekChange: (week: string) => void;
 }
 
 export const DriversManager = ({
-  data,
+  drivers,
+  loads,
+  systemState,
   onAddDriver,
   onUpdateDriver,
   onDeleteDriver,
@@ -26,23 +29,24 @@ export const DriversManager = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [formData, setFormData] = useState({
-    driverName: '',
+    driver_name: '',
+    driver_type: 'company_driver' as 'owner_operator' | 'company_driver',
     status: 'active' as 'active' | 'inactive',
   });
 
-  const selectedWeek = parseISO(data.systemState.selectedWeek);
+  const selectedWeek = parseISO(systemState.selectedWeek);
 
   const resetForm = () => {
-    setFormData({ driverName: '', status: 'active' });
+    setFormData({ driver_name: '', driver_type: 'company_driver', status: 'active' });
     setEditingDriver(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingDriver) {
-      onUpdateDriver(editingDriver.driverId, formData);
+      await onUpdateDriver(editingDriver.id, formData);
     } else {
-      onAddDriver(formData);
+      await onAddDriver(formData);
     }
     setIsDialogOpen(false);
     resetForm();
@@ -50,21 +54,63 @@ export const DriversManager = ({
 
   const handleEdit = (driver: Driver) => {
     setEditingDriver(driver);
-    setFormData({ driverName: driver.driverName, status: driver.status });
+    setFormData({ 
+      driver_name: driver.driver_name, 
+      driver_type: driver.driver_type,
+      status: driver.status 
+    });
     setIsDialogOpen(true);
   };
 
+  const calculateWeeklyGross = (driverId: string, weekStart: Date): number => {
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    
+    return loads
+      .filter(load => {
+        const deliveryDate = parseISO(load.delivery_date);
+        return (
+          load.driver_id === driverId &&
+          isWithinInterval(deliveryDate, { start: weekStart, end: weekEnd })
+        );
+      })
+      .reduce((sum, load) => sum + Number(load.rate), 0);
+  };
+
+  const calculateAutomaticBonus = (weeklyGross: number, driverType: 'owner_operator' | 'company_driver'): number => {
+    const thresholds = getBonusThresholds(driverType);
+    let bonus = 0;
+    const sortedThresholds = Object.keys(thresholds)
+      .map(Number)
+      .sort((a, b) => b - a);
+    
+    for (const threshold of sortedThresholds) {
+      if (weeklyGross >= threshold) {
+        bonus = thresholds[threshold];
+        break;
+      }
+    }
+    
+    return bonus;
+  };
+
+  const getFirstBonusThreshold = (driverType: 'owner_operator' | 'company_driver'): number => {
+    const thresholds = getBonusThresholds(driverType);
+    return Math.min(...Object.keys(thresholds).map(Number));
+  };
+
   const driverStats = useMemo(() => {
-    return data.drivers.map(driver => {
-      const weeklyGross = calculateWeeklyGross(data.loads, driver.driverId, selectedWeek);
-      const bonusAmount = calculateAutomaticBonus(weeklyGross);
+    return drivers.map(driver => {
+      const weeklyGross = calculateWeeklyGross(driver.id, selectedWeek);
+      const bonusAmount = calculateAutomaticBonus(weeklyGross, driver.driver_type);
+      const firstThreshold = getFirstBonusThreshold(driver.driver_type);
       return {
         driver,
         weeklyGross,
         bonusAmount,
+        firstThreshold,
       };
     });
-  }, [data.drivers, data.loads, selectedWeek]);
+  }, [drivers, loads, selectedWeek]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     const newWeek = direction === 'prev' 
@@ -100,12 +146,41 @@ export const DriversManager = ({
               <div className="space-y-2">
                 <label className="text-sm font-medium">Driver Name</label>
                 <Input
-                  value={formData.driverName}
-                  onChange={(e) => setFormData({ ...formData, driverName: e.target.value })}
+                  value={formData.driver_name}
+                  onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
                   placeholder="e.g., John Smith"
                   className="input-dark"
                   required
+                  maxLength={100}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Driver Type</label>
+                <Select
+                  value={formData.driver_type}
+                  onValueChange={(value: 'owner_operator' | 'company_driver') => 
+                    setFormData({ ...formData, driver_type: value })
+                  }
+                >
+                  <SelectTrigger className="input-dark">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="company_driver">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Company Driver
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="owner_operator">
+                      <div className="flex items-center gap-2">
+                        <Truck className="h-4 w-4" />
+                        Owner Operator
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -171,25 +246,38 @@ export const DriversManager = ({
 
       {/* Driver Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {driverStats.map(({ driver, weeklyGross, bonusAmount }) => (
+        {driverStats.map(({ driver, weeklyGross, bonusAmount, firstThreshold }) => (
           <div
-            key={driver.driverId}
+            key={driver.id}
             className="glass-card p-6 hover:border-primary/30 transition-all"
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <User className="h-6 w-6 text-primary" />
+                <div className={`flex h-12 w-12 items-center justify-center rounded-full ${
+                  driver.driver_type === 'owner_operator' ? 'bg-warning/10' : 'bg-primary/10'
+                }`}>
+                  {driver.driver_type === 'owner_operator' ? (
+                    <Truck className={`h-6 w-6 text-warning`} />
+                  ) : (
+                    <Building2 className={`h-6 w-6 text-primary`} />
+                  )}
                 </div>
                 <div>
-                  <h3 className="font-semibold">{driver.driverName}</h3>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                    driver.status === 'active'
-                      ? 'bg-success/20 text-success'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                    {driver.status}
-                  </span>
+                  <h3 className="font-semibold">{driver.driver_name}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${
+                      driver.driver_type === 'owner_operator' ? 'text-warning' : 'text-primary'
+                    }`}>
+                      {driver.driver_type === 'owner_operator' ? 'Owner Operator' : 'Company Driver'}
+                    </span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      driver.status === 'active'
+                        ? 'bg-success/20 text-success'
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {driver.status}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="flex gap-1">
@@ -204,7 +292,7 @@ export const DriversManager = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => onDeleteDriver(driver.driverId)}
+                  onClick={() => onDeleteDriver(driver.id)}
                   className="h-8 w-8 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -234,15 +322,17 @@ export const DriversManager = ({
                 </span>
               </div>
 
-              {weeklyGross > 0 && weeklyGross < 10000 && (
+              {weeklyGross > 0 && weeklyGross < firstThreshold && (
                 <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">
-                    ${(10000 - weeklyGross).toLocaleString()} more to reach first bonus tier
+                    ${(firstThreshold - weeklyGross).toLocaleString()} more to reach first bonus tier
                   </p>
                   <div className="mt-2 h-2 bg-background rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary/50 transition-all"
-                      style={{ width: `${Math.min((weeklyGross / 10000) * 100, 100)}%` }}
+                      className={`h-full transition-all ${
+                        driver.driver_type === 'owner_operator' ? 'bg-warning/50' : 'bg-primary/50'
+                      }`}
+                      style={{ width: `${Math.min((weeklyGross / firstThreshold) * 100, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -251,7 +341,7 @@ export const DriversManager = ({
           </div>
         ))}
 
-        {data.drivers.length === 0 && (
+        {drivers.length === 0 && (
           <div className="col-span-full text-center py-12 text-muted-foreground">
             <User className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p>No drivers yet. Add your first driver to get started.</p>

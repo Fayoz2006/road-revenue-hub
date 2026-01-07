@@ -1,5 +1,8 @@
 import { ReactNode } from 'react';
-import { Truck, LayoutDashboard, Package, Gift, Users } from 'lucide-react';
+import { Truck, LayoutDashboard, Package, Gift, Users, Sun, Moon, LogOut } from 'lucide-react';
+import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,6 +18,9 @@ const tabs = [
 ];
 
 export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
+  const { theme, toggleTheme } = useTheme();
+  const { signOut } = useAuth();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -57,10 +63,32 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
               })}
             </nav>
 
-            {/* Status */}
+            {/* Actions */}
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs text-muted-foreground">Live</span>
+              <span className="text-xs text-muted-foreground mr-2">Live</span>
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="h-9 w-9"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={signOut}
+                className="h-9 w-9 text-muted-foreground hover:text-destructive"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Plus, Pencil, Trash2, Package, MapPin, Calendar, DollarSign, User } from 'lucide-react';
-import { AppData, Load } from '@/types';
+import { useState, useMemo } from 'react';
+import { Plus, Pencil, Trash2, Package, MapPin, Calendar, DollarSign, User, Search, Link2, AlertCircle } from 'lucide-react';
+import { Driver, Load } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,55 +8,85 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { format, parseISO } from 'date-fns';
 
 interface LoadsManagerProps {
-  data: AppData;
-  onAddLoad: (load: Omit<Load, 'loadId' | 'createdAt'>) => void;
-  onUpdateLoad: (loadId: string, updates: Partial<Load>) => void;
-  onDeleteLoad: (loadId: string) => void;
+  drivers: Driver[];
+  loads: Load[];
+  onAddLoad: (load: Omit<Load, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<Load | null>;
+  onUpdateLoad: (id: string, updates: Partial<Load>) => Promise<void>;
+  onDeleteLoad: (id: string) => Promise<void>;
 }
 
-export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: LoadsManagerProps) => {
+export const LoadsManager = ({ drivers, loads, onAddLoad, onUpdateLoad, onDeleteLoad }: LoadsManagerProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLoad, setEditingLoad] = useState<Load | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [validationError, setValidationError] = useState('');
   const [formData, setFormData] = useState({
-    pickupDate: format(new Date(), 'yyyy-MM-dd'),
-    deliveryDate: format(new Date(), 'yyyy-MM-dd'),
+    load_id: '',
+    pickup_date: format(new Date(), 'yyyy-MM-dd'),
+    delivery_date: format(new Date(), 'yyyy-MM-dd'),
     origin: '',
     destination: '',
     rate: '',
-    loadType: 'FULL' as 'FULL' | 'PARTIAL',
-    driverId: '',
+    load_type: 'FULL' as 'FULL' | 'PARTIAL',
+    driver_id: '',
+    connected_full_load_id: '',
   });
+
+  const fullLoads = useMemo(() => loads.filter(l => l.load_type === 'FULL'), [loads]);
 
   const resetForm = () => {
     setFormData({
-      pickupDate: format(new Date(), 'yyyy-MM-dd'),
-      deliveryDate: format(new Date(), 'yyyy-MM-dd'),
+      load_id: '',
+      pickup_date: format(new Date(), 'yyyy-MM-dd'),
+      delivery_date: format(new Date(), 'yyyy-MM-dd'),
       origin: '',
       destination: '',
       rate: '',
-      loadType: 'FULL',
-      driverId: '',
+      load_type: 'FULL',
+      driver_id: '',
+      connected_full_load_id: '',
     });
     setEditingLoad(null);
+    setValidationError('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setValidationError('');
+
+    // Validate PARTIAL load requires a connected FULL load
+    if (formData.load_type === 'PARTIAL' && !formData.connected_full_load_id) {
+      setValidationError('PARTIAL loads must be linked to an existing FULL load.');
+      return;
+    }
+
+    // Find the connected full load to get its UUID
+    let connectedLoadUuid: string | null = null;
+    if (formData.connected_full_load_id) {
+      const connectedLoad = fullLoads.find(l => l.load_id === formData.connected_full_load_id);
+      if (!connectedLoad) {
+        setValidationError('The selected FULL load does not exist.');
+        return;
+      }
+      connectedLoadUuid = connectedLoad.id;
+    }
+
     const loadData = {
-      pickupDate: formData.pickupDate,
-      deliveryDate: formData.deliveryDate,
+      load_id: formData.load_id,
+      pickup_date: formData.pickup_date,
+      delivery_date: formData.delivery_date,
       origin: formData.origin,
       destination: formData.destination,
       rate: parseFloat(formData.rate),
-      loadType: formData.loadType,
-      driverId: formData.driverId,
+      load_type: formData.load_type,
+      driver_id: formData.driver_id,
+      connected_full_load_id: connectedLoadUuid,
     };
 
     if (editingLoad) {
-      onUpdateLoad(editingLoad.loadId, loadData);
+      await onUpdateLoad(editingLoad.id, loadData);
     } else {
-      onAddLoad(loadData);
+      await onAddLoad(loadData);
     }
 
     setIsDialogOpen(false);
@@ -65,25 +95,41 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
 
   const handleEdit = (load: Load) => {
     setEditingLoad(load);
+    const connectedLoad = load.connected_full_load_id 
+      ? loads.find(l => l.id === load.connected_full_load_id)?.load_id || ''
+      : '';
     setFormData({
-      pickupDate: load.pickupDate,
-      deliveryDate: load.deliveryDate,
+      load_id: load.load_id,
+      pickup_date: load.pickup_date,
+      delivery_date: load.delivery_date,
       origin: load.origin,
       destination: load.destination,
       rate: load.rate.toString(),
-      loadType: load.loadType,
-      driverId: load.driverId,
+      load_type: load.load_type,
+      driver_id: load.driver_id,
+      connected_full_load_id: connectedLoad,
     });
     setIsDialogOpen(true);
   };
 
   const getDriverName = (driverId: string) => {
-    return data.drivers.find(d => d.driverId === driverId)?.driverName || 'Unknown';
+    return drivers.find(d => d.id === driverId)?.driver_name || 'Unknown';
   };
 
-  const sortedLoads = [...data.loads].sort((a, b) => 
-    new Date(b.deliveryDate).getTime() - new Date(a.deliveryDate).getTime()
-  );
+  const filteredLoads = useMemo(() => {
+    const sorted = [...loads].sort((a, b) => 
+      new Date(b.delivery_date).getTime() - new Date(a.delivery_date).getTime()
+    );
+    
+    if (!searchQuery.trim()) return sorted;
+    
+    const query = searchQuery.toLowerCase();
+    return sorted.filter(load => 
+      load.load_id.toLowerCase().includes(query) ||
+      load.origin.toLowerCase().includes(query) ||
+      load.destination.toLowerCase().includes(query)
+    );
+  }, [loads, searchQuery]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -109,13 +155,32 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
               <DialogTitle>{editingLoad ? 'Edit Load' : 'Create New Load'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {validationError && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                  <p className="text-sm text-destructive">{validationError}</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Load ID</label>
+                <Input
+                  value={formData.load_id}
+                  onChange={(e) => setFormData({ ...formData, load_id: e.target.value })}
+                  placeholder="e.g., LD-2024-001"
+                  className="input-dark"
+                  required
+                  maxLength={50}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Pickup Date</label>
                   <Input
                     type="date"
-                    value={formData.pickupDate}
-                    onChange={(e) => setFormData({ ...formData, pickupDate: e.target.value })}
+                    value={formData.pickup_date}
+                    onChange={(e) => setFormData({ ...formData, pickup_date: e.target.value })}
                     className="input-dark"
                     required
                   />
@@ -124,8 +189,8 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                   <label className="text-sm font-medium">Delivery Date</label>
                   <Input
                     type="date"
-                    value={formData.deliveryDate}
-                    onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
+                    value={formData.delivery_date}
+                    onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
                     className="input-dark"
                     required
                   />
@@ -141,6 +206,7 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                     placeholder="e.g., Chicago, IL"
                     className="input-dark"
                     required
+                    maxLength={100}
                   />
                 </div>
                 <div className="space-y-2">
@@ -151,6 +217,7 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                     placeholder="e.g., Los Angeles, CA"
                     className="input-dark"
                     required
+                    maxLength={100}
                   />
                 </div>
               </div>
@@ -172,8 +239,11 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Load Type</label>
                   <Select
-                    value={formData.loadType}
-                    onValueChange={(value: 'FULL' | 'PARTIAL') => setFormData({ ...formData, loadType: value })}
+                    value={formData.load_type}
+                    onValueChange={(value: 'FULL' | 'PARTIAL') => {
+                      setFormData({ ...formData, load_type: value, connected_full_load_id: value === 'FULL' ? '' : formData.connected_full_load_id });
+                      setValidationError('');
+                    }}
                   >
                     <SelectTrigger className="input-dark">
                       <SelectValue />
@@ -186,19 +256,55 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                 </div>
               </div>
 
+              {formData.load_type === 'PARTIAL' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Link2 className="h-4 w-4" />
+                    Connected FULL Load ID (Required)
+                  </label>
+                  <Select
+                    value={formData.connected_full_load_id}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, connected_full_load_id: value });
+                      setValidationError('');
+                    }}
+                  >
+                    <SelectTrigger className="input-dark">
+                      <SelectValue placeholder="Select a FULL load to link" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      {fullLoads.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No FULL loads available. Create a FULL load first.
+                        </div>
+                      ) : (
+                        fullLoads.map(load => (
+                          <SelectItem key={load.id} value={load.load_id}>
+                            {load.load_id} - {load.origin} → {load.destination}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {fullLoads.length === 0 && (
+                    <p className="text-xs text-destructive">You must create a FULL load before creating a PARTIAL load.</p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">Assigned Driver</label>
                 <Select
-                  value={formData.driverId}
-                  onValueChange={(value) => setFormData({ ...formData, driverId: value })}
+                  value={formData.driver_id}
+                  onValueChange={(value) => setFormData({ ...formData, driver_id: value })}
                 >
                   <SelectTrigger className="input-dark">
                     <SelectValue placeholder="Select a driver" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    {data.drivers.filter(d => d.status === 'active').map(driver => (
-                      <SelectItem key={driver.driverId} value={driver.driverId}>
-                        {driver.driverName}
+                    {drivers.filter(d => d.status === 'active').map(driver => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.driver_name} ({driver.driver_type === 'owner_operator' ? 'OO' : 'CD'})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -209,7 +315,11 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="btn-primary">
+                <Button 
+                  type="submit" 
+                  className="btn-primary"
+                  disabled={formData.load_type === 'PARTIAL' && fullLoads.length === 0}
+                >
                   {editingLoad ? 'Update Load' : 'Create Load'}
                 </Button>
               </div>
@@ -218,22 +328,33 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
         </Dialog>
       </div>
 
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by Load ID, origin, or destination..."
+          className="pl-10 input-dark"
+        />
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="glass-card p-4">
           <p className="text-sm text-muted-foreground">Total Loads</p>
-          <p className="text-2xl font-bold font-mono">{data.loads.length}</p>
+          <p className="text-2xl font-bold font-mono">{loads.length}</p>
         </div>
         <div className="glass-card p-4">
           <p className="text-sm text-muted-foreground">Full Loads</p>
           <p className="text-2xl font-bold font-mono text-primary">
-            {data.loads.filter(l => l.loadType === 'FULL').length}
+            {loads.filter(l => l.load_type === 'FULL').length}
           </p>
         </div>
         <div className="glass-card p-4">
           <p className="text-sm text-muted-foreground">Partial Loads</p>
           <p className="text-2xl font-bold font-mono text-warning">
-            {data.loads.filter(l => l.loadType === 'PARTIAL').length}
+            {loads.filter(l => l.load_type === 'PARTIAL').length}
           </p>
         </div>
       </div>
@@ -244,7 +365,8 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Load</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Load ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Route</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Dates</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Driver</th>
@@ -253,31 +375,33 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30">
-              {sortedLoads.length === 0 ? (
+              {filteredLoads.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p>No loads yet. Create your first load to get started.</p>
+                    <p>{searchQuery ? 'No loads match your search.' : 'No loads yet. Create your first load to get started.'}</p>
                   </td>
                 </tr>
               ) : (
-                sortedLoads.map((load) => (
-                  <tr key={load.loadId} className="table-row-hover">
+                filteredLoads.map((load) => (
+                  <tr key={load.id} className="table-row-hover">
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                          load.loadType === 'FULL' ? 'bg-primary/20' : 'bg-warning/20'
-                        }`}>
-                          <Package className={`h-4 w-4 ${
-                            load.loadType === 'FULL' ? 'text-primary' : 'text-warning'
-                          }`} />
+                      <span className="font-mono font-medium">{load.load_id}</span>
+                      {load.connected_full_load_id && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                          <Link2 className="h-3 w-3" />
+                          <span>
+                            {loads.find(l => l.id === load.connected_full_load_id)?.load_id || 'Linked'}
+                          </span>
                         </div>
-                        <span className={`status-badge ${
-                          load.loadType === 'FULL' ? 'status-full' : 'status-partial'
-                        }`}>
-                          {load.loadType}
-                        </span>
-                      </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`status-badge ${
+                        load.load_type === 'FULL' ? 'status-full' : 'status-partial'
+                      }`}>
+                        {load.load_type}
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
@@ -291,21 +415,21 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                       <div className="text-sm">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{format(parseISO(load.pickupDate), 'MMM d')}</span>
+                          <span>{format(parseISO(load.pickup_date), 'MMM d')}</span>
                           <span className="text-muted-foreground">-</span>
-                          <span>{format(parseISO(load.deliveryDate), 'MMM d')}</span>
+                          <span>{format(parseISO(load.delivery_date), 'MMM d')}</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-muted-foreground" />
-                        <span>{getDriverName(load.driverId)}</span>
+                        <span>{getDriverName(load.driver_id)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right">
                       <span className="font-mono font-semibold text-lg">
-                        ${load.rate.toLocaleString()}
+                        ${Number(load.rate).toLocaleString()}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right">
@@ -321,7 +445,7 @@ export const LoadsManager = ({ data, onAddLoad, onUpdateLoad, onDeleteLoad }: Lo
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => onDeleteLoad(load.loadId)}
+                          onClick={() => onDeleteLoad(load.id)}
                           className="h-8 w-8 text-destructive hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
