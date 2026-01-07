@@ -1,47 +1,48 @@
 import { useState, useMemo } from 'react';
 import { Plus, Gift, Zap, FileText, Trash2 } from 'lucide-react';
-import { AppData, Bonus, BONUS_THRESHOLDS } from '@/types';
+import { Driver, Bonus, getBonusThresholds, COMPANY_DRIVER_BONUS_THRESHOLDS, OWNER_OPERATOR_BONUS_THRESHOLDS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfWeek } from 'date-fns';
 
 interface BonusesManagerProps {
-  data: AppData;
-  onAddBonus: (bonus: Omit<Bonus, 'bonusId' | 'createdAt' | 'bonusType'>) => void;
-  onDeleteBonus: (bonusId: string) => void;
+  drivers: Driver[];
+  bonuses: Bonus[];
+  onAddBonus: (bonus: Omit<Bonus, 'id' | 'user_id' | 'bonus_type' | 'created_at'>) => Promise<Bonus | null>;
+  onDeleteBonus: (id: string) => Promise<void>;
 }
 
-export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManagerProps) => {
+export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: BonusesManagerProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     amount: '',
     date: format(new Date(), 'yyyy-MM-dd'),
-    driverId: '',
+    driver_id: '',
     note: '',
-    week: format(new Date(), 'yyyy-MM-dd'),
   });
 
   const resetForm = () => {
     setFormData({
       amount: '',
       date: format(new Date(), 'yyyy-MM-dd'),
-      driverId: '',
+      driver_id: '',
       note: '',
-      week: format(new Date(), 'yyyy-MM-dd'),
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onAddBonus({
+    const weekStart = format(startOfWeek(parseISO(formData.date), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    
+    await onAddBonus({
       amount: parseFloat(formData.amount),
       date: formData.date,
-      driverId: formData.driverId || null,
-      note: formData.note,
-      week: formData.week,
+      driver_id: formData.driver_id === 'company-wide' ? null : formData.driver_id || null,
+      note: formData.note || null,
+      week_start: weekStart,
     });
     setIsDialogOpen(false);
     resetForm();
@@ -49,20 +50,20 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
 
   const getDriverName = (driverId: string | null) => {
     if (!driverId) return 'Company-wide';
-    return data.drivers.find(d => d.driverId === driverId)?.driverName || 'Unknown';
+    return drivers.find(d => d.id === driverId)?.driver_name || 'Unknown';
   };
 
   const sortedBonuses = useMemo(() => {
-    return [...data.bonuses].sort((a, b) => 
+    return [...bonuses].sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [data.bonuses]);
+  }, [bonuses]);
 
-  const automaticBonuses = sortedBonuses.filter(b => b.bonusType === 'automatic');
-  const manualBonuses = sortedBonuses.filter(b => b.bonusType === 'manual');
+  const automaticBonuses = sortedBonuses.filter(b => b.bonus_type === 'automatic');
+  const manualBonuses = sortedBonuses.filter(b => b.bonus_type === 'manual');
 
-  const totalAutomatic = automaticBonuses.reduce((sum, b) => sum + b.amount, 0);
-  const totalManual = manualBonuses.reduce((sum, b) => sum + b.amount, 0);
+  const totalAutomatic = automaticBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalManual = manualBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -116,18 +117,18 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Driver (Optional)</label>
-              <Select
-                  value={formData.driverId}
-                  onValueChange={(value) => setFormData({ ...formData, driverId: value === 'company-wide' ? '' : value })}
+                <Select
+                  value={formData.driver_id || 'company-wide'}
+                  onValueChange={(value) => setFormData({ ...formData, driver_id: value === 'company-wide' ? '' : value })}
                 >
                   <SelectTrigger className="input-dark">
                     <SelectValue placeholder="Select a driver (or leave empty for company-wide)" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="company-wide">Company-wide</SelectItem>
-                    {data.drivers.filter(d => d.status === 'active').map(driver => (
-                      <SelectItem key={driver.driverId} value={driver.driverId}>
-                        {driver.driverName}
+                    {drivers.filter(d => d.status === 'active').map(driver => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.driver_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -142,6 +143,7 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
                   placeholder="Reason for this bonus..."
                   className="input-dark"
                   rows={3}
+                  maxLength={500}
                 />
               </div>
 
@@ -159,19 +161,35 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
       </div>
 
       {/* Bonus Threshold Reference */}
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Zap className="h-5 w-5 text-primary" />
-          Automatic Weekly Bonus Thresholds
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {Object.entries(BONUS_THRESHOLDS).map(([threshold, bonus]) => (
-            <div key={threshold} className="bg-muted/50 rounded-lg p-3 text-center">
-              <p className="text-xs text-muted-foreground mb-1">Weekly Gross ≥</p>
-              <p className="font-mono font-semibold">${parseInt(threshold).toLocaleString()}</p>
-              <p className="text-primary font-bold mt-1">${bonus}</p>
-            </div>
-          ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            Company Driver Thresholds
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {Object.entries(COMPANY_DRIVER_BONUS_THRESHOLDS).map(([threshold, bonus]) => (
+              <div key={threshold} className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">≥ ${parseInt(threshold).toLocaleString()}</p>
+                <p className="text-primary font-bold">${bonus}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-warning" />
+            Owner Operator Thresholds
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {Object.entries(OWNER_OPERATOR_BONUS_THRESHOLDS).map(([threshold, bonus]) => (
+              <div key={threshold} className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">≥ ${parseInt(threshold).toLocaleString()}</p>
+                <p className="text-warning font-bold">${bonus}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -179,7 +197,7 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
       <div className="grid grid-cols-3 gap-4">
         <div className="glass-card p-4">
           <p className="text-sm text-muted-foreground">Total Bonuses</p>
-          <p className="text-2xl font-bold font-mono">{data.bonuses.length}</p>
+          <p className="text-2xl font-bold font-mono">{bonuses.length}</p>
         </div>
         <div className="glass-card p-4">
           <p className="text-sm text-muted-foreground">Automatic</p>
@@ -219,23 +237,23 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
                 </tr>
               ) : (
                 sortedBonuses.map((bonus) => (
-                  <tr key={bonus.bonusId} className="table-row-hover">
+                  <tr key={bonus.id} className="table-row-hover">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        {bonus.bonusType === 'automatic' ? (
+                        {bonus.bonus_type === 'automatic' ? (
                           <Zap className="h-4 w-4 text-primary" />
                         ) : (
                           <FileText className="h-4 w-4 text-warning" />
                         )}
                         <span className={`status-badge ${
-                          bonus.bonusType === 'automatic' ? 'status-full' : 'status-partial'
+                          bonus.bonus_type === 'automatic' ? 'status-full' : 'status-partial'
                         }`}>
-                          {bonus.bonusType}
+                          {bonus.bonus_type}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      {getDriverName(bonus.driverId)}
+                      {getDriverName(bonus.driver_id)}
                     </td>
                     <td className="px-4 py-4">
                       {format(parseISO(bonus.date), 'MMM d, yyyy')}
@@ -245,15 +263,15 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
                     </td>
                     <td className="px-4 py-4 text-right">
                       <span className="font-mono font-semibold text-lg text-primary">
-                        ${bonus.amount.toLocaleString()}
+                        ${Number(bonus.amount).toLocaleString()}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      {bonus.bonusType === 'manual' && (
+                      {bonus.bonus_type === 'manual' && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => onDeleteBonus(bonus.bonusId)}
+                          onClick={() => onDeleteBonus(bonus.id)}
                           className="h-8 w-8 text-destructive hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
