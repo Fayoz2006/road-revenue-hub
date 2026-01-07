@@ -116,15 +116,15 @@ export const BonusesManager = ({ data, onAddBonus, onDeleteBonus }: BonusesManag
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Driver (Optional)</label>
-                <Select
+              <Select
                   value={formData.driverId}
-                  onValueChange={(value) => setFormData({ ...formData, driverId: value })}
+                  onValueChange={(value) => setFormData({ ...formData, driverId: value === 'company-wide' ? '' : value })}
                 >
                   <SelectTrigger className="input-dark">
                     <SelectValue placeholder="Select a driver (or leave empty for company-wide)" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="">Company-wide</SelectItem>
+                    <SelectItem value="company-wide">Company-wide</SelectItem>
                     {data.drivers.filter(d => d.status === 'active').map(driver => (
                       <SelectItem key={driver.driverId} value={driver.driverId}>
                         {driver.driverName}
