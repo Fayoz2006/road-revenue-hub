@@ -20,7 +20,6 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
   const [formData, setFormData] = useState({
     amount: '',
     date: format(new Date(), 'yyyy-MM-dd'),
-    driver_id: '',
     note: '',
   });
 
@@ -28,7 +27,6 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
     setFormData({
       amount: '',
       date: format(new Date(), 'yyyy-MM-dd'),
-      driver_id: '',
       note: '',
     });
   };
@@ -40,7 +38,7 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
     await onAddBonus({
       amount: parseFloat(formData.amount),
       date: formData.date,
-      driver_id: formData.driver_id === 'company-wide' ? null : formData.driver_id || null,
+      driver_id: null, // Manual bonuses are company-wide (paid to dispatcher)
       note: formData.note || null,
       week_start: weekStart,
     });
@@ -113,26 +111,6 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
                     required
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Driver (Optional)</label>
-                <Select
-                  value={formData.driver_id || 'company-wide'}
-                  onValueChange={(value) => setFormData({ ...formData, driver_id: value === 'company-wide' ? '' : value })}
-                >
-                  <SelectTrigger className="input-dark">
-                    <SelectValue placeholder="Select a driver (or leave empty for company-wide)" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    <SelectItem value="company-wide">Company-wide</SelectItem>
-                    {drivers.filter(d => d.status === 'active').map(driver => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        {driver.driver_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">
