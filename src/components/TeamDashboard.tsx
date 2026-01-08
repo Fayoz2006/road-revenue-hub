@@ -1,12 +1,13 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Calendar, DollarSign, TrendingUp, Package, Gift, Wallet } from 'lucide-react';
 import { MetricCard } from './MetricCard';
 import { Driver, Load, Bonus, SystemState } from '@/types';
-import { format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay, isWithinInterval, startOfWeek, endOfWeek, addWeeks, isBefore, isAfter } from 'date-fns';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { DateRange } from 'react-day-picker';
 
 interface TeamDashboardProps {
   drivers: Driver[];
@@ -57,6 +58,35 @@ const calculateSalary = (
   };
 };
 
+// Get weeks (Monday-Sunday) for a given month
+const getWeeksInMonth = (monthStr: string) => {
+  const monthStart = startOfMonth(parseISO(`${monthStr}-01`));
+  const monthEnd = endOfMonth(monthStart);
+  
+  const weeks: { start: Date; end: Date; label: string }[] = [];
+  let currentWeekStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  
+  while (isBefore(currentWeekStart, monthEnd) || format(currentWeekStart, 'yyyy-MM') === monthStr) {
+    const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
+    
+    // Only include weeks that overlap with the month
+    if (isAfter(weekEnd, monthStart) || format(weekEnd, 'yyyy-MM') === monthStr) {
+      weeks.push({
+        start: currentWeekStart,
+        end: weekEnd,
+        label: `${format(currentWeekStart, 'MMM d')} - ${format(weekEnd, 'MMM d')}`,
+      });
+    }
+    
+    currentWeekStart = addWeeks(currentWeekStart, 1);
+    
+    // Stop if we've passed the month
+    if (isAfter(currentWeekStart, monthEnd)) break;
+  }
+  
+  return weeks;
+};
+
 export const TeamDashboard = ({ 
   drivers, 
   loads, 
@@ -67,43 +97,66 @@ export const TeamDashboard = ({
 }: TeamDashboardProps) => {
   const selectedDate = parseISO(systemState.selectedDay);
   const selectedMonth = systemState.selectedMonth;
+  
+  // Date range for period selection
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const monthMetrics = useMemo(() => {
-    const monthStart = startOfMonth(parseISO(`${selectedMonth}-01`));
-    const monthEnd = endOfMonth(monthStart);
-    return calculateSalary(loads, bonuses, monthStart, monthEnd);
-  }, [loads, bonuses, selectedMonth]);
+  // Get weeks for current month
+  const weeksInMonth = useMemo(() => getWeeksInMonth(selectedMonth), [selectedMonth]);
 
-  const dayMetrics = useMemo(() => {
-    const dayStart = startOfDay(selectedDate);
-    const dayEnd = endOfDay(selectedDate);
-    return calculateSalary(loads, bonuses, dayStart, dayEnd);
-  }, [loads, bonuses, selectedDate]);
+  // Calculate metrics based on selected range or full month
+  const periodMetrics = useMemo(() => {
+    let startDate: Date;
+    let endDate: Date;
+    
+    if (dateRange?.from && dateRange?.to) {
+      startDate = startOfDay(dateRange.from);
+      endDate = endOfDay(dateRange.to);
+    } else {
+      startDate = startOfMonth(parseISO(`${selectedMonth}-01`));
+      endDate = endOfMonth(startDate);
+    }
+    
+    return {
+      ...calculateSalary(loads, bonuses, startDate, endDate),
+      startDate,
+      endDate,
+    };
+  }, [loads, bonuses, selectedMonth, dateRange]);
 
-  // Chart data for weekly gross per driver
+  // Chart data for gross per driver (single bar)
   const chartData = useMemo(() => {
-    const monthStart = startOfMonth(parseISO(`${selectedMonth}-01`));
-    const monthEnd = endOfMonth(monthStart);
+    let startDate: Date;
+    let endDate: Date;
+    
+    if (dateRange?.from && dateRange?.to) {
+      startDate = startOfDay(dateRange.from);
+      endDate = endOfDay(dateRange.to);
+    } else {
+      startDate = startOfMonth(parseISO(`${selectedMonth}-01`));
+      endDate = endOfMonth(startDate);
+    }
     
     return drivers.map(driver => {
       const driverLoads = loads.filter(load => {
         const deliveryDate = parseISO(load.delivery_date);
-        return load.driver_id === driver.id && isWithinInterval(deliveryDate, { start: monthStart, end: monthEnd });
+        return load.driver_id === driver.id && isWithinInterval(deliveryDate, { start: startDate, end: endDate });
       });
       
-      const fullGross = driverLoads.filter(l => l.load_type === 'FULL').reduce((sum, l) => sum + Number(l.rate), 0);
-      const partialGross = driverLoads.filter(l => l.load_type === 'PARTIAL').reduce((sum, l) => sum + Number(l.rate), 0);
+      const totalGross = driverLoads.reduce((sum, l) => sum + Number(l.rate), 0);
       
       return {
         name: driver.driver_name.split(' ')[0],
         fullName: driver.driver_name,
         type: driver.driver_type === 'owner_operator' ? 'OO' : 'CD',
-        fullGross,
-        partialGross,
-        total: fullGross + partialGross,
+        gross: totalGross,
       };
-    }).sort((a, b) => b.total - a.total);
-  }, [drivers, loads, selectedMonth]);
+    }).sort((a, b) => b.gross - a.gross);
+  }, [drivers, loads, selectedMonth, dateRange]);
+
+  const periodLabel = dateRange?.from && dateRange?.to
+    ? `${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d, yyyy')}`
+    : format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy');
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -114,75 +167,110 @@ export const TeamDashboard = ({
           <p className="text-muted-foreground">Real-time payroll and revenue overview</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Day Picker */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 bg-card border-border">
-                <Calendar className="h-4 w-4" />
-                {format(selectedDate, 'MMM d, yyyy')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-card border-border" align="end">
-              <CalendarComponent
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && onDateChange(date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-
+        <div className="flex items-center gap-3 flex-wrap">
           {/* Month Picker */}
           <input
             type="month"
             value={selectedMonth}
-            onChange={(e) => onMonthChange(e.target.value)}
+            onChange={(e) => {
+              onMonthChange(e.target.value);
+              setDateRange(undefined);
+            }}
             className="h-10 rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
+          
+          {/* Period Range Picker */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 bg-card border-border">
+                <Calendar className="h-4 w-4" />
+                {dateRange?.from ? periodLabel : 'Select Period'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 bg-card border-border" align="end">
+              <div className="p-4 space-y-4">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Quick Select (Week)</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {weeksInMonth.slice(0, 6).map((week, i) => (
+                      <Button
+                        key={i}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setDateRange({ from: week.start, to: week.end })}
+                      >
+                        {week.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-border pt-4">
+                  <h4 className="text-sm font-medium mb-2">Custom Range</h4>
+                  <CalendarComponent
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={1}
+                    weekStartsOn={1}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateRange(undefined)}
+                    className="flex-1"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {/* Monthly Overview */}
+      {/* Period Overview */}
       <div>
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          Monthly Overview - {format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy')}
+          {dateRange?.from ? 'Period Overview' : 'Monthly Overview'} - {periodLabel}
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             label="Full Loads Gross"
-            value={monthMetrics.fullGross}
+            value={periodMetrics.fullGross}
             icon={<Package className="h-5 w-5" />}
             variant="primary"
           />
           <MetricCard
             label="Partial Loads Gross"
-            value={monthMetrics.partialGross}
+            value={periodMetrics.partialGross}
             icon={<Package className="h-5 w-5" />}
             variant="warning"
           />
           <MetricCard
             label="Total Gross Revenue"
-            value={monthMetrics.totalGross}
+            value={periodMetrics.totalGross}
             icon={<DollarSign className="h-5 w-5" />}
             variant="success"
           />
           <MetricCard
-            label="Monthly Bonuses"
-            value={monthMetrics.totalBonuses}
+            label="Period Bonuses"
+            value={periodMetrics.totalBonuses}
             icon={<Gift className="h-5 w-5" />}
           />
         </div>
       </div>
 
-      {/* Driver Performance Chart */}
+      {/* Driver Performance Chart - Single bar per driver */}
       {chartData.length > 0 && (
         <div className="glass-card p-6">
           <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
-            Driver Performance - {format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy')}
+            Driver Performance - {periodLabel}
           </h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -205,15 +293,13 @@ export const TeamDashboard = ({
                     borderRadius: '8px',
                   }}
                   labelStyle={{ color: 'hsl(var(--foreground))' }}
-                  formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name === 'fullGross' ? 'Full Loads' : 'Partial Loads']}
+                  formatter={(value: number) => [`$${value.toLocaleString()}`, 'Total Gross']}
                   labelFormatter={(label, payload) => {
                     const item = payload?.[0]?.payload;
                     return item ? `${item.fullName} (${item.type})` : label;
                   }}
                 />
-                <Legend />
-                <Bar dataKey="fullGross" name="Full Loads" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="partialGross" name="Partial Loads" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="gross" name="Total Gross" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -231,17 +317,17 @@ export const TeamDashboard = ({
           <div className="flex items-center justify-between py-3 border-b border-border/50">
             <div>
               <p className="font-medium">Full Load Commission (1%)</p>
-              <p className="text-sm text-muted-foreground">Based on ${monthMetrics.fullGross.toLocaleString()} gross</p>
+              <p className="text-sm text-muted-foreground">Based on ${periodMetrics.fullGross.toLocaleString()} gross</p>
             </div>
-            <span className="font-mono text-lg">${monthMetrics.fullLoadCommission.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="font-mono text-lg">${periodMetrics.fullLoadCommission.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
 
           <div className="flex items-center justify-between py-3 border-b border-border/50">
             <div>
               <p className="font-medium">Partial Load Commission (2%)</p>
-              <p className="text-sm text-muted-foreground">Based on ${monthMetrics.partialGross.toLocaleString()} gross</p>
+              <p className="text-sm text-muted-foreground">Based on ${periodMetrics.partialGross.toLocaleString()} gross</p>
             </div>
-            <span className="font-mono text-lg">${monthMetrics.partialLoadCommission.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="font-mono text-lg">${periodMetrics.partialLoadCommission.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
 
           <div className="flex items-center justify-between py-3 border-b border-border/50">
@@ -249,7 +335,7 @@ export const TeamDashboard = ({
               <p className="font-medium">Total Bonuses</p>
               <p className="text-sm text-muted-foreground">Automatic + Manual bonuses</p>
             </div>
-            <span className="font-mono text-lg">${monthMetrics.totalBonuses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="font-mono text-lg">${periodMetrics.totalBonuses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
 
           <div className="flex items-center justify-between py-4 bg-primary/10 rounded-lg px-4 -mx-4">
@@ -258,7 +344,7 @@ export const TeamDashboard = ({
               <p className="text-sm text-muted-foreground">Commission + Bonuses</p>
             </div>
             <span className="font-mono text-2xl font-bold text-primary">
-              ${monthMetrics.totalSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              ${periodMetrics.totalSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
         </div>
@@ -266,23 +352,41 @@ export const TeamDashboard = ({
 
       {/* Daily Stats */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">
-          Daily Stats - {format(selectedDate, 'MMMM d, yyyy')}
-        </h3>
+        <div className="flex items-center gap-3 mb-4">
+          <h3 className="text-lg font-semibold">Daily Stats</h3>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Calendar className="h-4 w-4" />
+                {format(selectedDate, 'MMM d, yyyy')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 bg-card border-border" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && onDateChange(date)}
+                weekStartsOn={1}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetricCard
             label="Day's Revenue"
-            value={dayMetrics.totalGross}
+            value={calculateSalary(loads, bonuses, startOfDay(selectedDate), endOfDay(selectedDate)).totalGross}
             icon={<DollarSign className="h-5 w-5" />}
           />
           <MetricCard
             label="Day's Commission"
-            value={dayMetrics.fullLoadCommission + dayMetrics.partialLoadCommission}
+            value={calculateSalary(loads, bonuses, startOfDay(selectedDate), endOfDay(selectedDate)).fullLoadCommission + 
+                   calculateSalary(loads, bonuses, startOfDay(selectedDate), endOfDay(selectedDate)).partialLoadCommission}
             icon={<TrendingUp className="h-5 w-5" />}
           />
           <MetricCard
             label="Day's Bonuses"
-            value={dayMetrics.totalBonuses}
+            value={calculateSalary(loads, bonuses, startOfDay(selectedDate), endOfDay(selectedDate)).totalBonuses}
             icon={<Gift className="h-5 w-5" />}
           />
         </div>

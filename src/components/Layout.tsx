@@ -3,6 +3,7 @@ import { Truck, LayoutDashboard, Package, Gift, Users, Sun, Moon, LogOut } from 
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 interface LayoutProps {
   children: ReactNode;
@@ -67,6 +68,8 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs text-muted-foreground mr-2">Live</span>
+              
+              <ChangePasswordDialog />
               
               <Button
                 variant="ghost"

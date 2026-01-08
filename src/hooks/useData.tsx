@@ -103,8 +103,23 @@ export const useData = (): UseDataReturn => {
       .reduce((sum, load) => sum + Number(load.rate), 0);
   };
 
-  // Recalculate automatic bonuses
-  const recalculateAutomaticBonuses = useCallback(async () => {
+  // Helper to calculate weekly gross with custom loads array
+  const calculateWeeklyGrossWithLoads = (driverId: string, weekStart: Date, loadsList: Load[]): number => {
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    
+    return loadsList
+      .filter(load => {
+        const deliveryDate = parseISO(load.delivery_date);
+        return (
+          load.driver_id === driverId &&
+          isWithinInterval(deliveryDate, { start: weekStart, end: weekEnd })
+        );
+      })
+      .reduce((sum, load) => sum + Number(load.rate), 0);
+  };
+
+  // Recalculate automatic bonuses with specific loads
+  const recalculateBonusesWithLoads = useCallback(async (loadsList: Load[]) => {
     if (!user) return;
 
     try {
@@ -117,7 +132,7 @@ export const useData = (): UseDataReturn => {
 
       // Get all unique weeks from loads
       const weeks = new Set<string>();
-      loads.forEach(load => {
+      loadsList.forEach(load => {
         const weekStart = startOfWeek(parseISO(load.delivery_date), { weekStartsOn: 1 });
         weeks.add(format(weekStart, 'yyyy-MM-dd'));
       });
@@ -129,7 +144,7 @@ export const useData = (): UseDataReturn => {
         const weekStart = parseISO(weekString);
         
         drivers.forEach(driver => {
-          const weeklyGross = calculateWeeklyGross(driver.id, weekStart);
+          const weeklyGross = calculateWeeklyGrossWithLoads(driver.id, weekStart, loadsList);
           const bonusAmount = calculateAutomaticBonus(weeklyGross, driver.driver_type);
           
           if (bonusAmount > 0) {
@@ -163,7 +178,12 @@ export const useData = (): UseDataReturn => {
     } catch (error) {
       console.error('Error recalculating bonuses:', error);
     }
-  }, [user, loads, drivers]);
+  }, [user, drivers]);
+
+  // Recalculate automatic bonuses using current loads state
+  const recalculateAutomaticBonuses = useCallback(async () => {
+    await recalculateBonusesWithLoads(loads);
+  }, [loads, recalculateBonusesWithLoads]);
 
   // Driver operations
   const addDriver = async (driver: Omit<Driver, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
@@ -236,13 +256,17 @@ export const useData = (): UseDataReturn => {
         .single();
       
       if (error) throw error;
-      setLoads(prev => [data as Load, ...prev]);
+      const newLoad = data as Load;
+      
+      // Update loads state immediately
+      const updatedLoads = [newLoad, ...loads];
+      setLoads(updatedLoads);
+      
+      // Immediately recalculate bonuses with the new load included
+      await recalculateBonusesWithLoads(updatedLoads);
+      
       toast.success('Load added successfully');
-      
-      // Recalculate bonuses
-      setTimeout(() => recalculateAutomaticBonuses(), 100);
-      
-      return data as Load;
+      return newLoad;
     } catch (error: any) {
       console.error('Error adding load:', error);
       if (error.message?.includes('unique')) {
@@ -262,11 +286,12 @@ export const useData = (): UseDataReturn => {
         .eq('id', id);
       
       if (error) throw error;
-      setLoads(prev => prev.map(l => l.id === id ? { ...l, ...updates } as Load : l));
-      toast.success('Load updated successfully');
+      const updatedLoads = loads.map(l => l.id === id ? { ...l, ...updates } as Load : l);
+      setLoads(updatedLoads);
       
-      // Recalculate bonuses
-      setTimeout(() => recalculateAutomaticBonuses(), 100);
+      // Immediately recalculate bonuses
+      await recalculateBonusesWithLoads(updatedLoads);
+      toast.success('Load updated successfully');
     } catch (error: any) {
       console.error('Error updating load:', error);
       if (error.message?.includes('unique')) {
@@ -285,11 +310,12 @@ export const useData = (): UseDataReturn => {
         .eq('id', id);
       
       if (error) throw error;
-      setLoads(prev => prev.filter(l => l.id !== id));
-      toast.success('Load deleted successfully');
+      const updatedLoads = loads.filter(l => l.id !== id);
+      setLoads(updatedLoads);
       
-      // Recalculate bonuses
-      setTimeout(() => recalculateAutomaticBonuses(), 100);
+      // Immediately recalculate bonuses
+      await recalculateBonusesWithLoads(updatedLoads);
+      toast.success('Load deleted successfully');
     } catch (error) {
       console.error('Error deleting load:', error);
       toast.error('Failed to delete load');
