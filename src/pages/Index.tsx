@@ -4,7 +4,9 @@ import { TeamDashboard } from '@/components/TeamDashboard';
 import { LoadsManager } from '@/components/LoadsManager';
 import { BonusesManager } from '@/components/BonusesManager';
 import { DriversManager } from '@/components/DriversManager';
+import { PrebooksCalendar } from '@/components/PrebooksCalendar';
 import { useData } from '@/hooks/useData';
+import { usePrebooks } from '@/hooks/usePrebooks';
 import { format, startOfWeek } from 'date-fns';
 
 const Index = () => {
@@ -25,6 +27,8 @@ const Index = () => {
     addManualBonus,
     deleteBonus,
   } = useData();
+  
+  const { notes: prebookNotes, addNote, updateNote, deleteNote, loading: prebooksLoading } = usePrebooks();
 
   const handleDateChange = (date: Date) => {
     updateSystemState({ selectedDay: format(date, 'yyyy-MM-dd') });
@@ -92,6 +96,15 @@ const Index = () => {
           onUpdateDriver={updateDriver}
           onDeleteDriver={deleteDriver}
           onWeekChange={handleWeekChange}
+        />
+      )}
+      
+      {activeTab === 'prebooks' && (
+        <PrebooksCalendar
+          notes={prebookNotes}
+          onAddNote={addNote}
+          onUpdateNote={updateNote}
+          onDeleteNote={deleteNote}
         />
       )}
     </Layout>

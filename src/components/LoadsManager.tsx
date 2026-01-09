@@ -1,11 +1,91 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Package, MapPin, Calendar, DollarSign, User, Search, Link2, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, MapPin, Calendar, DollarSign, User, Search, Link2, AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
 import { Driver, Load } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { format, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
+
+// Searchable Full Load Selector Component
+interface FullLoadSearchProps {
+  fullLoads: Load[];
+  selectedLoadId: string;
+  onSelect: (loadId: string) => void;
+}
+
+const FullLoadSearch = ({ fullLoads, selectedLoadId, onSelect }: FullLoadSearchProps) => {
+  const [open, setOpen] = useState(false);
+  const selectedLoad = fullLoads.find(l => l.load_id === selectedLoadId);
+
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium flex items-center gap-2">
+        <Link2 className="h-4 w-4" />
+        Connected FULL Load ID (Required)
+      </label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between input-dark"
+          >
+            {selectedLoad 
+              ? `${selectedLoad.load_id} - ${selectedLoad.origin} → ${selectedLoad.destination}`
+              : "Search for a FULL load..."}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-0 bg-card border-border" align="start">
+          <Command className="bg-card">
+            <CommandInput placeholder="Search by Load ID, origin, or destination..." className="h-9" />
+            <CommandList>
+              <CommandEmpty>
+                {fullLoads.length === 0 
+                  ? "No FULL loads available. Create a FULL load first."
+                  : "No matching loads found."}
+              </CommandEmpty>
+              <CommandGroup>
+                {fullLoads.map(load => (
+                  <CommandItem
+                    key={load.id}
+                    value={`${load.load_id} ${load.origin} ${load.destination}`}
+                    onSelect={() => {
+                      onSelect(load.load_id);
+                      setOpen(false);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        selectedLoadId === load.load_id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col">
+                      <span className="font-mono font-medium">{load.load_id}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {load.origin} → {load.destination}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {fullLoads.length === 0 && (
+        <p className="text-xs text-destructive">You must create a FULL load before creating a PARTIAL load.</p>
+      )}
+    </div>
+  );
+};
 
 interface LoadsManagerProps {
   drivers: Driver[];
@@ -132,12 +212,12 @@ export const LoadsManager = ({ drivers, loads, onAddLoad, onUpdateLoad, onDelete
   }, [loads, searchQuery]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Loads Management</h2>
-          <p className="text-muted-foreground">Create and manage shipment loads</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Loads Management</h2>
+          <p className="text-sm text-muted-foreground">Create and manage shipment loads</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -145,7 +225,7 @@ export const LoadsManager = ({ drivers, loads, onAddLoad, onUpdateLoad, onDelete
           if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button className="btn-primary gap-2">
+            <Button className="btn-primary gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               New Load
             </Button>
@@ -257,39 +337,14 @@ export const LoadsManager = ({ drivers, loads, onAddLoad, onUpdateLoad, onDelete
               </div>
 
               {formData.load_type === 'PARTIAL' && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <Link2 className="h-4 w-4" />
-                    Connected FULL Load ID (Required)
-                  </label>
-                  <Select
-                    value={formData.connected_full_load_id}
-                    onValueChange={(value) => {
-                      setFormData({ ...formData, connected_full_load_id: value });
-                      setValidationError('');
-                    }}
-                  >
-                    <SelectTrigger className="input-dark">
-                      <SelectValue placeholder="Select a FULL load to link" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-card border-border">
-                      {fullLoads.length === 0 ? (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">
-                          No FULL loads available. Create a FULL load first.
-                        </div>
-                      ) : (
-                        fullLoads.map(load => (
-                          <SelectItem key={load.id} value={load.load_id}>
-                            {load.load_id} - {load.origin} → {load.destination}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {fullLoads.length === 0 && (
-                    <p className="text-xs text-destructive">You must create a FULL load before creating a PARTIAL load.</p>
-                  )}
-                </div>
+                <FullLoadSearch
+                  fullLoads={fullLoads}
+                  selectedLoadId={formData.connected_full_load_id}
+                  onSelect={(value) => {
+                    setFormData({ ...formData, connected_full_load_id: value });
+                    setValidationError('');
+                  }}
+                />
               )}
 
               <div className="space-y-2">
@@ -340,27 +395,86 @@ export const LoadsManager = ({ drivers, loads, onAddLoad, onUpdateLoad, onDelete
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="glass-card p-4">
-          <p className="text-sm text-muted-foreground">Total Loads</p>
-          <p className="text-2xl font-bold font-mono">{loads.length}</p>
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="glass-card p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Total Loads</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono">{loads.length}</p>
         </div>
-        <div className="glass-card p-4">
-          <p className="text-sm text-muted-foreground">Full Loads</p>
-          <p className="text-2xl font-bold font-mono text-primary">
+        <div className="glass-card p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Full Loads</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-primary">
             {loads.filter(l => l.load_type === 'FULL').length}
           </p>
         </div>
-        <div className="glass-card p-4">
-          <p className="text-sm text-muted-foreground">Partial Loads</p>
-          <p className="text-2xl font-bold font-mono text-warning">
+        <div className="glass-card p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Partial Loads</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-warning">
             {loads.filter(l => l.load_type === 'PARTIAL').length}
           </p>
         </div>
       </div>
 
-      {/* Loads Table */}
-      <div className="glass-card overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-3">
+        {filteredLoads.length === 0 ? (
+          <div className="glass-card p-8 text-center text-muted-foreground">
+            <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>{searchQuery ? 'No loads match your search.' : 'No loads yet. Create your first load to get started.'}</p>
+          </div>
+        ) : (
+          filteredLoads.map((load) => (
+            <div key={load.id} className="glass-card p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="font-mono font-medium text-sm">{load.load_id}</span>
+                  <span className={`ml-2 status-badge ${
+                    load.load_type === 'FULL' ? 'status-full' : 'status-partial'
+                  }`}>
+                    {load.load_type}
+                  </span>
+                  {load.connected_full_load_id && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                      <Link2 className="h-3 w-3" />
+                      <span>{loads.find(l => l.id === load.connected_full_load_id)?.load_id || 'Linked'}</span>
+                    </div>
+                  )}
+                </div>
+                <span className="font-mono font-semibold text-lg text-primary">
+                  ${Number(load.rate).toLocaleString()}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{load.origin} → {load.destination}</span>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span>{format(parseISO(load.pickup_date), 'MMM d')} - {format(parseISO(load.delivery_date), 'MMM d')}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{getDriverName(load.driver_id)}</span>
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2 border-t border-border/30">
+                <Button variant="ghost" size="sm" onClick={() => handleEdit(load)}>
+                  <Pencil className="h-4 w-4 mr-1" /> Edit
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => onDeleteLoad(load.id)} className="text-destructive hover:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>

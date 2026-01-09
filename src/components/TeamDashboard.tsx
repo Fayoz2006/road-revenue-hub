@@ -159,15 +159,15 @@ export const TeamDashboard = ({
     : format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy');
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       {/* Header with Date Picker */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Financial Dashboard</h2>
-          <p className="text-muted-foreground">Real-time payroll and revenue overview</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Financial Dashboard</h2>
+          <p className="text-sm text-muted-foreground">Real-time payroll and revenue overview</p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {/* Month Picker */}
           <input
             type="month"
@@ -233,12 +233,13 @@ export const TeamDashboard = ({
 
       {/* Period Overview */}
       <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          {dateRange?.from ? 'Period Overview' : 'Monthly Overview'} - {periodLabel}
+        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+          <span className="hidden sm:inline">{dateRange?.from ? 'Period Overview' : 'Monthly Overview'} - </span>
+          {periodLabel}
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <MetricCard
             label="Full Loads Gross"
             value={periodMetrics.fullGross}
