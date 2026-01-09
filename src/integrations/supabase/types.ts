@@ -151,6 +151,33 @@ export type Database = {
           },
         ]
       }
+      prebook_notes: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          note: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          note: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          note?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

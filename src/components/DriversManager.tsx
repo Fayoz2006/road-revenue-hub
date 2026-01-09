@@ -120,12 +120,12 @@ export const DriversManager = ({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Drivers</h2>
-          <p className="text-muted-foreground">Driver performance and weekly stats</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Drivers</h2>
+          <p className="text-sm text-muted-foreground">Driver performance and weekly stats</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -133,7 +133,7 @@ export const DriversManager = ({
           if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button className="btn-primary gap-2">
+            <Button className="btn-primary gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Add Driver
             </Button>
@@ -215,29 +215,30 @@ export const DriversManager = ({
       </div>
 
       {/* Week Picker */}
-      <div className="glass-card p-4">
-        <div className="flex items-center justify-between">
+      <div className="glass-card p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-primary" />
+            <Calendar className="h-5 w-5 text-primary hidden sm:block" />
             <div>
-              <p className="text-sm text-muted-foreground">Selected Week</p>
-              <p className="font-semibold">
-                Week of {format(selectedWeek, 'MMMM d, yyyy')}
+              <p className="text-xs sm:text-sm text-muted-foreground">Selected Week</p>
+              <p className="text-sm sm:text-base font-semibold">
+                Week of {format(selectedWeek, 'MMM d, yyyy')}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigateWeek('prev')}>
+            <Button variant="outline" size="sm" onClick={() => navigateWeek('prev')} className="flex-1 sm:flex-none">
               Previous
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => onWeekChange(format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'))}
+              className="flex-1 sm:flex-none"
             >
               This Week
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigateWeek('next')}>
+            <Button variant="outline" size="sm" onClick={() => navigateWeek('next')} className="flex-1 sm:flex-none">
               Next
             </Button>
           </div>

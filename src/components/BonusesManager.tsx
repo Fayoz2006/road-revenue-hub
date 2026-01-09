@@ -64,12 +64,12 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
   const totalManual = manualBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Bonuses</h2>
-          <p className="text-muted-foreground">Automatic and manual bonus management</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Bonuses</h2>
+          <p className="text-sm text-muted-foreground">Automatic and manual bonus management</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -77,7 +77,7 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
           if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button className="btn-primary gap-2">
+            <Button className="btn-primary gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Add Manual Bonus
             </Button>
@@ -139,32 +139,32 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
       </div>
 
       {/* Bonus Threshold Reference */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div className="glass-card p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+            <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Company Driver Thresholds
           </h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {Object.entries(COMPANY_DRIVER_BONUS_THRESHOLDS).map(([threshold, bonus]) => (
-              <div key={threshold} className="bg-muted/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground mb-1">≥ ${parseInt(threshold).toLocaleString()}</p>
-                <p className="text-primary font-bold">${bonus}</p>
+              <div key={threshold} className="bg-muted/50 rounded-lg p-2 sm:p-3 text-center">
+                <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">≥ ${parseInt(threshold).toLocaleString()}</p>
+                <p className="text-primary font-bold text-sm sm:text-base">${bonus}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-warning" />
+        <div className="glass-card p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+            <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-warning" />
             Owner Operator Thresholds
           </h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {Object.entries(OWNER_OPERATOR_BONUS_THRESHOLDS).map(([threshold, bonus]) => (
-              <div key={threshold} className="bg-muted/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground mb-1">≥ ${parseInt(threshold).toLocaleString()}</p>
-                <p className="text-warning font-bold">${bonus}</p>
+              <div key={threshold} className="bg-muted/50 rounded-lg p-2 sm:p-3 text-center">
+                <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">≥ ${parseInt(threshold).toLocaleString()}</p>
+                <p className="text-warning font-bold text-sm sm:text-base">${bonus}</p>
               </div>
             ))}
           </div>
@@ -172,20 +172,20 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="glass-card p-4">
-          <p className="text-sm text-muted-foreground">Total Bonuses</p>
-          <p className="text-2xl font-bold font-mono">{bonuses.length}</p>
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="glass-card p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Total Bonuses</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono">{bonuses.length}</p>
         </div>
-        <div className="glass-card p-4">
-          <p className="text-sm text-muted-foreground">Automatic</p>
-          <p className="text-2xl font-bold font-mono text-primary">
+        <div className="glass-card p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Automatic</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-primary">
             ${totalAutomatic.toLocaleString()}
           </p>
         </div>
-        <div className="glass-card p-4">
-          <p className="text-sm text-muted-foreground">Manual</p>
-          <p className="text-2xl font-bold font-mono text-warning">
+        <div className="glass-card p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">Manual</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-warning">
             ${totalManual.toLocaleString()}
           </p>
         </div>
@@ -245,16 +245,14 @@ export const BonusesManager = ({ drivers, bonuses, onAddBonus, onDeleteBonus }: 
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      {bonus.bonus_type === 'manual' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onDeleteBonus(bonus.id)}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onDeleteBonus(bonus.id)}
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))
