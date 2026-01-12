@@ -23,8 +23,8 @@ export const WeeklyGrossTable = ({ drivers, loads, selectedWeek, onWeekChange }:
   const calculateDailyGross = (driverId: string, date: Date): number => {
     return loads
       .filter(load => {
-        const deliveryDate = parseISO(load.delivery_date);
-        return load.driver_id === driverId && isSameDay(deliveryDate, date);
+        const pickupDate = parseISO(load.pickup_date);
+        return load.driver_id === driverId && isSameDay(pickupDate, date);
       })
       .reduce((sum, load) => sum + Number(load.rate), 0);
   };
@@ -86,17 +86,17 @@ export const WeeklyGrossTable = ({ drivers, loads, selectedWeek, onWeekChange }:
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-primary/10 hover:bg-primary/10">
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[80px]">Truck №</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[150px]">Driver</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[100px]">Weekly total</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Monday</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Tuesday</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Wednesday</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Thursday</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Friday</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Saturday</TableHead>
-                <TableHead className="font-semibold text-foreground whitespace-nowrap min-w-[90px]">Sunday</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[80px] bg-blue-100/80">Truck №</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[150px] bg-blue-100/80">Driver</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[100px] bg-blue-100/80 border-r-2 border-slate-300">Weekly total</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Monday</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Tuesday</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Wednesday</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Thursday</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Friday</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Saturday</TableHead>
+                <TableHead className="font-semibold text-slate-700 whitespace-nowrap min-w-[90px] bg-amber-50">Sunday</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -110,21 +110,21 @@ export const WeeklyGrossTable = ({ drivers, loads, selectedWeek, onWeekChange }:
                 driverData.map(({ driver, dailyGross, weeklyTotal }, index) => (
                   <TableRow 
                     key={driver.id} 
-                    className={index % 2 === 0 ? 'bg-muted/30' : 'bg-background'}
+                    className="hover:bg-transparent"
                   >
-                    <TableCell className="font-mono font-medium">
+                    <TableCell className={`font-sans font-medium text-slate-800 ${index % 2 === 0 ? 'bg-blue-50/60' : 'bg-blue-50/30'}`}>
                       {driver.truck_number || '-'}
                     </TableCell>
-                    <TableCell className="font-semibold uppercase">
+                    <TableCell className={`font-sans font-semibold uppercase text-slate-800 ${index % 2 === 0 ? 'bg-blue-50/60' : 'bg-blue-50/30'}`}>
                       {driver.driver_name}
                     </TableCell>
-                    <TableCell className="font-mono font-bold">
+                    <TableCell className={`font-sans font-bold text-slate-900 border-r-2 border-slate-300 ${index % 2 === 0 ? 'bg-blue-50/60' : 'bg-blue-50/30'}`}>
                       {formatCurrency(weeklyTotal)}
                     </TableCell>
                     {dailyGross.map((amount, dayIndex) => (
                       <TableCell 
                         key={dayIndex} 
-                        className={`font-mono ${amount > 0 ? 'bg-warning/30 text-warning-foreground font-semibold' : ''}`}
+                        className={`font-sans text-slate-700 ${amount > 0 ? 'bg-green-100 text-green-800 font-semibold' : index % 2 === 0 ? 'bg-amber-50/40' : 'bg-white'}`}
                       >
                         {formatCurrency(amount)}
                       </TableCell>
