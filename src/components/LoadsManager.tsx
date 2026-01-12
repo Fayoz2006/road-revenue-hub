@@ -348,22 +348,62 @@ export const LoadsManager = ({ drivers, loads, onAddLoad, onUpdateLoad, onDelete
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Assigned Driver</label>
-                <Select
-                  value={formData.driver_id}
-                  onValueChange={(value) => setFormData({ ...formData, driver_id: value })}
-                >
-                  <SelectTrigger className="input-dark">
-                    <SelectValue placeholder="Select a driver" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {drivers.filter(d => d.status === 'active').map(driver => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        {driver.driver_name} ({driver.driver_type === 'owner_operator' ? 'OO' : 'CD'})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium">Assigned Driver (by Name or Truck №)</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between input-dark"
+                    >
+                      {formData.driver_id 
+                        ? (() => {
+                            const driver = drivers.find(d => d.id === formData.driver_id);
+                            return driver 
+                              ? `${driver.truck_number ? `[${driver.truck_number}] ` : ''}${driver.driver_name}`
+                              : "Select a driver...";
+                          })()
+                        : "Select a driver..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0 bg-card border-border" align="start">
+                    <Command className="bg-card">
+                      <CommandInput placeholder="Search by name or truck №..." className="h-9" />
+                      <CommandList>
+                        <CommandEmpty>No drivers found.</CommandEmpty>
+                        <CommandGroup>
+                          {drivers.filter(d => d.status === 'active').map(driver => (
+                            <CommandItem
+                              key={driver.id}
+                              value={`${driver.truck_number || ''} ${driver.driver_name}`}
+                              onSelect={() => {
+                                setFormData({ ...formData, driver_id: driver.id });
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.driver_id === driver.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {driver.truck_number && <span className="font-mono">[{driver.truck_number}] </span>}
+                                  {driver.driver_name}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {driver.driver_type === 'owner_operator' ? 'Owner Operator' : 'Company Driver'}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">

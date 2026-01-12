@@ -65,6 +65,7 @@ export type Database = {
           driver_type: Database["public"]["Enums"]["driver_type"]
           id: string
           status: Database["public"]["Enums"]["driver_status"]
+          truck_number: string | null
           updated_at: string
           user_id: string
         }
@@ -74,6 +75,7 @@ export type Database = {
           driver_type?: Database["public"]["Enums"]["driver_type"]
           id?: string
           status?: Database["public"]["Enums"]["driver_status"]
+          truck_number?: string | null
           updated_at?: string
           user_id: string
         }
@@ -83,6 +85,7 @@ export type Database = {
           driver_type?: Database["public"]["Enums"]["driver_type"]
           id?: string
           status?: Database["public"]["Enums"]["driver_status"]
+          truck_number?: string | null
           updated_at?: string
           user_id?: string
         }

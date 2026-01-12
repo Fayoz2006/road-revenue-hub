@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format, parseISO, startOfWeek, addWeeks, subWeeks, endOfWeek, isWithinInterval } from 'date-fns';
+import { WeeklyGrossTable } from './WeeklyGrossTable';
 
 interface DriversManagerProps {
   drivers: Driver[];
@@ -32,21 +33,28 @@ export const DriversManager = ({
     driver_name: '',
     driver_type: 'company_driver' as 'owner_operator' | 'company_driver',
     status: 'active' as 'active' | 'inactive',
+    truck_number: '',
   });
 
   const selectedWeek = parseISO(systemState.selectedWeek);
 
   const resetForm = () => {
-    setFormData({ driver_name: '', driver_type: 'company_driver', status: 'active' });
+    setFormData({ driver_name: '', driver_type: 'company_driver', status: 'active', truck_number: '' });
     setEditingDriver(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const driverData = {
+      driver_name: formData.driver_name,
+      driver_type: formData.driver_type,
+      status: formData.status,
+      truck_number: formData.truck_number || null,
+    };
     if (editingDriver) {
-      await onUpdateDriver(editingDriver.id, formData);
+      await onUpdateDriver(editingDriver.id, driverData);
     } else {
-      await onAddDriver(formData);
+      await onAddDriver(driverData);
     }
     setIsDialogOpen(false);
     resetForm();
@@ -57,7 +65,8 @@ export const DriversManager = ({
     setFormData({ 
       driver_name: driver.driver_name, 
       driver_type: driver.driver_type,
-      status: driver.status 
+      status: driver.status,
+      truck_number: driver.truck_number || '',
     });
     setIsDialogOpen(true);
   };
@@ -143,18 +152,29 @@ export const DriversManager = ({
               <DialogTitle>{editingDriver ? 'Edit Driver' : 'Add New Driver'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Driver Name</label>
-                <Input
-                  value={formData.driver_name}
-                  onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
-                  placeholder="e.g., John Smith"
-                  className="input-dark"
-                  required
-                  maxLength={100}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Truck №</label>
+                  <Input
+                    value={formData.truck_number}
+                    onChange={(e) => setFormData({ ...formData, truck_number: e.target.value })}
+                    placeholder="e.g., 0101"
+                    className="input-dark"
+                    maxLength={20}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Driver Name</label>
+                  <Input
+                    value={formData.driver_name}
+                    onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
+                    placeholder="e.g., John Smith"
+                    className="input-dark"
+                    required
+                    maxLength={100}
+                  />
+                </div>
               </div>
-
               <div className="space-y-2">
                 <label className="text-sm font-medium">Driver Type</label>
                 <Select
@@ -264,6 +284,9 @@ export const DriversManager = ({
                   )}
                 </div>
                 <div>
+                  {driver.truck_number && (
+                    <span className="font-mono text-xs text-muted-foreground">#{driver.truck_number}</span>
+                  )}
                   <h3 className="font-semibold">{driver.driver_name}</h3>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-medium ${
@@ -349,6 +372,16 @@ export const DriversManager = ({
           </div>
         )}
       </div>
+
+      {/* Weekly Gross Table */}
+      {drivers.length > 0 && (
+        <WeeklyGrossTable 
+          drivers={drivers}
+          loads={loads}
+          selectedWeek={systemState.selectedWeek}
+          onWeekChange={onWeekChange}
+        />
+      )}
     </div>
   );
 };
