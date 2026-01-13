@@ -94,10 +94,10 @@ export const useData = (): UseDataReturn => {
     
     return loads
       .filter(load => {
-        const pickupDate = parseISO(load.pickup_date);
+        const deliveryDate = parseISO(load.delivery_date);
         return (
           load.driver_id === driverId &&
-          isWithinInterval(pickupDate, { start: weekStart, end: weekEnd })
+          isWithinInterval(deliveryDate, { start: weekStart, end: weekEnd })
         );
       })
       .reduce((sum, load) => sum + Number(load.rate), 0);
@@ -109,10 +109,10 @@ export const useData = (): UseDataReturn => {
     
     return loadsList
       .filter(load => {
-        const pickupDate = parseISO(load.pickup_date);
+        const deliveryDate = parseISO(load.delivery_date);
         return (
           load.driver_id === driverId &&
-          isWithinInterval(pickupDate, { start: weekStart, end: weekEnd })
+          isWithinInterval(deliveryDate, { start: weekStart, end: weekEnd })
         );
       })
       .reduce((sum, load) => sum + Number(load.rate), 0);
