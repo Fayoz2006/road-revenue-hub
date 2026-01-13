@@ -23,8 +23,8 @@ export const WeeklyGrossTable = ({ drivers, loads, selectedWeek, onWeekChange }:
   const calculateDailyGross = (driverId: string, date: Date): number => {
     return loads
       .filter(load => {
-        const deliveryDate = parseISO(load.delivery_date);
-        return load.driver_id === driverId && isSameDay(deliveryDate, date);
+        const pickupDate = parseISO(load.pickup_date);
+        return load.driver_id === driverId && isSameDay(pickupDate, date);
       })
       .reduce((sum, load) => sum + Number(load.rate), 0);
   };
