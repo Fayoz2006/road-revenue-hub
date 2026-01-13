@@ -76,10 +76,10 @@ export const DriversManager = ({
     
     return loads
       .filter(load => {
-        const deliveryDate = parseISO(load.delivery_date);
+        const pickupDate = parseISO(load.pickup_date);
         return (
           load.driver_id === driverId &&
-          isWithinInterval(deliveryDate, { start: weekStart, end: weekEnd })
+          isWithinInterval(pickupDate, { start: weekStart, end: weekEnd })
         );
       })
       .reduce((sum, load) => sum + Number(load.rate), 0);
