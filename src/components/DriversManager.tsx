@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { format, parseISO, startOfWeek, addWeeks, subWeeks, endOfWeek, isWithinInterval } from 'date-fns';
+import { format, startOfWeek, addWeeks, subWeeks, endOfWeek, isWithinInterval } from 'date-fns';
 import { WeeklyGrossTable } from './WeeklyGrossTable';
+import { parseLocalDate } from '@/lib/utils';
 
 interface DriversManagerProps {
   drivers: Driver[];
@@ -36,7 +37,7 @@ export const DriversManager = ({
     truck_number: '',
   });
 
-  const selectedWeek = parseISO(systemState.selectedWeek);
+  const selectedWeek = parseLocalDate(systemState.selectedWeek);
 
   const resetForm = () => {
     setFormData({ driver_name: '', driver_type: 'company_driver', status: 'active', truck_number: '' });
@@ -76,7 +77,7 @@ export const DriversManager = ({
     
     return loads
       .filter(load => {
-        const deliveryDate = parseISO(load.delivery_date);
+        const deliveryDate = parseLocalDate(load.delivery_date);
         return (
           load.driver_id === driverId &&
           isWithinInterval(deliveryDate, { start: weekStart, end: weekEnd })
