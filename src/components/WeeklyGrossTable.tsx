@@ -3,7 +3,8 @@ import { ChevronLeft, ChevronRight, Truck } from 'lucide-react';
 import { Driver, Load } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format, parseISO, startOfWeek, addWeeks, subWeeks, endOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, startOfWeek, addWeeks, subWeeks, endOfWeek, addDays, isSameDay } from 'date-fns';
+import { parseLocalDate } from '@/lib/utils';
 
 interface WeeklyGrossTableProps {
   drivers: Driver[];
@@ -13,7 +14,7 @@ interface WeeklyGrossTableProps {
 }
 
 export const WeeklyGrossTable = ({ drivers, loads, selectedWeek, onWeekChange }: WeeklyGrossTableProps) => {
-  const weekStart = parseISO(selectedWeek);
+  const weekStart = parseLocalDate(selectedWeek);
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
   const daysOfWeek = useMemo(() => {
@@ -23,7 +24,7 @@ export const WeeklyGrossTable = ({ drivers, loads, selectedWeek, onWeekChange }:
   const calculateDailyGross = (driverId: string, date: Date): number => {
     return loads
       .filter(load => {
-        const deliveryDate = parseISO(load.delivery_date);
+        const deliveryDate = parseLocalDate(load.delivery_date);
         return load.driver_id === driverId && isSameDay(deliveryDate, date);
       })
       .reduce((sum, load) => sum + Number(load.rate), 0);
