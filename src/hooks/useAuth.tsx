@@ -20,19 +20,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    const SHARED_EMAIL = 'jimmy@ugtransport.com';
+    const SHARED_PASSWORD = 'Www12345';
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setSession(session);
+        setUser(session.user);
+        setLoading(false);
+        return;
+      }
+      // No session — auto-login with shared account so the app is publicly accessible
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: SHARED_EMAIL,
+        password: SHARED_PASSWORD,
+      });
+      if (!error && data.session) {
+        setSession(data.session);
+        setUser(data.user);
+      }
       setLoading(false);
     });
 
