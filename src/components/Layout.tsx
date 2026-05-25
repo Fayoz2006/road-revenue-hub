@@ -1,9 +1,7 @@
 import { ReactNode, useState } from 'react';
-import { Truck, LayoutDashboard, Package, Gift, Users, Sun, Moon, LogOut, CalendarDays, Menu, X } from 'lucide-react';
+import { Truck, LayoutDashboard, Package, Gift, Users, Sun, Moon, CalendarDays, Menu } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
-import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 interface LayoutProps {
@@ -22,7 +20,6 @@ const tabs = [
 
 export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
   const { theme, toggleTheme } = useTheme();
-  const { signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleTabChange = (tabId: string) => {
@@ -76,11 +73,7 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
             <div className="flex items-center gap-1 sm:gap-2">
               <span className="hidden sm:flex h-2 w-2 rounded-full bg-primary animate-pulse" />
               <span className="hidden sm:inline text-xs text-muted-foreground mr-2">Live</span>
-              
-              <div className="hidden sm:block">
-                <ChangePasswordDialog />
-              </div>
-              
+
               <Button
                 variant="ghost"
                 size="icon"
@@ -92,15 +85,6 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
                 ) : (
                   <Moon className="h-4 w-4" />
                 )}
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={signOut}
-                className="hidden sm:flex h-9 w-9 text-muted-foreground hover:text-destructive"
-              >
-                <LogOut className="h-4 w-4" />
               </Button>
 
               {/* Mobile Menu */}
@@ -135,17 +119,6 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
                         );
                       })}
                     </nav>
-                    <div className="p-4 border-t border-border space-y-2">
-                      <ChangePasswordDialog />
-                      <Button
-                        variant="outline"
-                        onClick={signOut}
-                        className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                      </Button>
-                    </div>
                   </div>
                 </SheetContent>
               </Sheet>
